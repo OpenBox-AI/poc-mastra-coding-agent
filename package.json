@@ -5,6 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "openbox:sdk:build": "npm --prefix ../openbox-mastra-sdk run build",
+    "predev": "npm run openbox:sdk:build",
+    "prebuild": "npm run openbox:sdk:build",
     "dev": "mastra dev",
     "build": "mastra build",
     "start": "mastra start"
@@ -25,7 +28,8 @@
     "@mastra/loggers": "latest",
     "@mastra/mcp": "latest",
     "@mastra/memory": "latest",
-    "zod": "^3.25.76"
+    "@openbox-ai/openbox-mastra-sdk": "file:../openbox-mastra-sdk",
+    "zod": "^4.1.5"
   },
   "devDependencies": {
     "@types/node": "^24.1.0",

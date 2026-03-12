@@ -6,8 +6,8 @@ export const createSandbox = createTool({
   id: 'createSandbox',
   description: 'Create an e2b sandbox',
   inputSchema: z.object({
-    metadata: z.record(z.string()).optional().describe('Custom metadata for the sandbox'),
-    envs: z.record(z.string()).optional().describe(`
+    metadata: z.record(z.string(), z.string()).optional().describe('Custom metadata for the sandbox'),
+    envs: z.record(z.string(), z.string()).optional().describe(`
       Custom environment variables for the sandbox.
       Used when executing commands and code in the sandbox.
       Can be overridden with the \`envs\` argument when executing commands or code.
@@ -54,7 +54,10 @@ export const runCode = createTool({
           .enum(['ts', 'js', 'python'])
           .default('python')
           .describe('language used for code execution. If not provided, default python context is used'),
-        envs: z.record(z.string()).optional().describe('Custom environment variables for code execution.'),
+        envs: z
+          .record(z.string(), z.string())
+          .optional()
+          .describe('Custom environment variables for code execution.'),
         timeoutMS: z.number().optional().describe(`
         Timeout for the code execution in **milliseconds**.
         @default 60_000 // 60 seconds
@@ -193,7 +196,7 @@ export const writeFiles = createTool({
 
       return {
         success: true,
-        filesWritten: context.files.map(file => file.path),
+        filesWritten: context.files.map((file: { path: string }) => file.path),
       };
     } catch (e) {
       return {

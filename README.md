@@ -21,6 +21,8 @@ This template demonstrates how to build an AI coding assistant that can work wit
 - Node.js 20 or higher
 - E2B API key (sign up at [e2b.dev](https://e2b.dev))
 - OpenAI API key
+- OpenBox URL and API key
+- `openbox-mastra-sdk` checked out next to this repo at `../openbox-mastra-sdk`
 
 ## Setup
 
@@ -29,7 +31,7 @@ This template demonstrates how to build an AI coding assistant that can work wit
    ```bash
    git clone https://github.com/mastra-ai/template-coding-agent.git
    cd template-coding-agent
-   pnpm install
+   npm install
    ```
 
 2. **Set up environment variables:**
@@ -42,13 +44,19 @@ This template demonstrates how to build an AI coding assistant that can work wit
    ```env
    E2B_API_KEY="your-e2b-api-key-here"
    OPENAI_API_KEY="your-openai-api-key-here"
+   OPENBOX_URL="https://core.openbox.ai"
+   OPENBOX_API_KEY="obx_live_your_openbox_api_key"
+   OPENBOX_GOVERNANCE_POLICY="fail_closed"
+   OPENBOX_VALIDATE="true"
    ```
 
 3. **Start the development server:**
 
    ```bash
-   pnpm run dev
+   npm run dev
    ```
+
+   `npm run dev` builds the local SDK from `../openbox-mastra-sdk` before starting Mastra.
 
 ## Architecture
 
@@ -115,6 +123,10 @@ The agent includes a configured memory system:
 ```bash
 E2B_API_KEY=your_e2b_api_key_here
 OPENAI_API_KEY=your_openai_api_key_here
+OPENBOX_URL=https://core.openbox.ai
+OPENBOX_API_KEY=obx_live_your_openbox_api_key
+OPENBOX_GOVERNANCE_POLICY=fail_closed
+OPENBOX_VALIDATE=true
 ```
 
 ### Customization

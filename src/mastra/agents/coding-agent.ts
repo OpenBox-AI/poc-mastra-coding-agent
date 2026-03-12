@@ -20,6 +20,7 @@ import {
 import { fastembed } from '@mastra/fastembed';
 
 export const codingAgent = new Agent({
+  id: 'coding-agent',
   name: 'Coding Agent',
   instructions: `
 # Mastra Coding Agent for E2B Sandboxes
@@ -204,14 +205,20 @@ Remember: You are not just a code executor, but a complete development environme
     runCommand,
   },
   memory: new Memory({
-    storage: new LibSQLStore({ url: 'file:../../mastra.db' }),
+    storage: new LibSQLStore({
+      id: 'coding-agent-memory',
+      url: 'file:../../mastra.db',
+    }),
     options: {
-      threads: { generateTitle: true },
       semanticRecall: true,
       workingMemory: { enabled: true },
+      generateTitle: true,
     },
     embedder: fastembed,
-    vector: new LibSQLVector({ connectionUrl: 'file:../../mastra.db' }),
+    vector: new LibSQLVector({
+      id: 'coding-agent-memory-vector',
+      url: 'file:../../mastra.db',
+    }),
   }),
-  defaultStreamOptions: { maxSteps: 20 },
+  defaultStreamOptionsLegacy: { maxSteps: 20 },
 });
