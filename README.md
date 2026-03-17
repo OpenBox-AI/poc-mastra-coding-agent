@@ -105,7 +105,3 @@ This project depends on the sibling `openbox-mastra-sdk` repo by local path. Reb
 npm --prefix ../openbox-mastra-sdk run build
 npm run dev
 ```
-
-## License
-
-Apache-2.0
