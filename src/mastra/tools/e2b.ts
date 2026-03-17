@@ -1,6 +1,84 @@
 import { createTool } from '@mastra/core/tools';
 import z from 'zod';
+import { inspect } from 'node:util';
 import { FilesystemEventType, FileType, Sandbox } from '@e2b/code-interpreter';
+
+const TRANSIENT_ERROR_PATTERN =
+  /(fetch failed|context deadline exceeded|temporarily unavailable|timeout|timed out|connection reset|socket disconnected|tls connection|econnreset|etimedout|eai_again|enotfound)/i;
+const TRANSIENT_ERROR_CODES = new Set(['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ENOTFOUND']);
+const DEFAULT_MAX_RETRIES = 2;
+const DEFAULT_RETRY_BASE_DELAY_MS = 250;
+
+function errorDetails(error: unknown): string {
+  if (error instanceof Error) {
+    const base = `${error.name}: ${error.message}`;
+    const cause = (error as { cause?: unknown }).cause;
+    if (cause instanceof Error) {
+      return `${base}; cause=${cause.name}: ${cause.message}`;
+    }
+    if (cause != null) {
+      return `${base}; cause=${inspect(cause, { depth: 3 })}`;
+    }
+    return base;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  return inspect(error, { depth: 4 });
+}
+
+function errorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') {
+    return null;
+  }
+
+  const cause = (error as { cause?: unknown }).cause;
+  if (cause && typeof cause === 'object' && 'code' in cause) {
+    const code = String((cause as { code?: unknown }).code ?? '');
+    return code.length > 0 ? code : null;
+  }
+
+  return null;
+}
+
+function isTransientError(error: unknown): boolean {
+  if (TRANSIENT_ERROR_PATTERN.test(errorDetails(error))) {
+    return true;
+  }
+
+  const code = errorCode(error);
+  if (!code) {
+    return false;
+  }
+
+  return TRANSIENT_ERROR_CODES.has(code);
+}
+
+async function retryTransient<T>(label: string, operation: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt <= DEFAULT_MAX_RETRIES; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      const retryable = isTransientError(error) && attempt < DEFAULT_MAX_RETRIES;
+      if (!retryable) {
+        throw error;
+      }
+
+      const waitMs = DEFAULT_RETRY_BASE_DELAY_MS * 2 ** attempt;
+      console.warn('[e2b-tools] transient failure, retrying', {
+        attempt: attempt + 1,
+        error: errorDetails(error),
+        operation: label,
+        waitMs,
+      });
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+    }
+  }
+
+  throw new Error(`retryTransient exhausted unexpectedly for ${label}`);
+}
 
 export const createSandbox = createTool({
   id: 'createSandbox',
@@ -27,16 +105,16 @@ export const createSandbox = createTool({
         error: z.string(),
       }),
     ),
-  execute: async ({ context: sandboxOptions }) => {
+  execute: async sandboxOptions => {
     try {
-      const sandbox = await Sandbox.create(sandboxOptions);
+      const sandbox = await retryTransient('createSandbox', () => Sandbox.create(sandboxOptions));
 
       return {
         sandboxId: sandbox.sandboxId,
       };
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },
@@ -79,18 +157,19 @@ export const runCode = createTool({
         error: z.string().describe('The error from a failed execution'),
       }),
     ),
-  execute: async ({ context }) => {
+  execute: async context => {
     try {
-      const sandbox = await Sandbox.connect(context.sandboxId);
-
-      const execution = await sandbox.runCode(context.code, context.runCodeOpts);
+      const execution = await retryTransient('runCode', async () => {
+        const sandbox = await Sandbox.connect(context.sandboxId);
+        return sandbox.runCode(context.code, context.runCodeOpts);
+      });
 
       return {
         execution: JSON.stringify(execution.toJSON()),
       };
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },
@@ -113,10 +192,12 @@ export const readFile = createTool({
         error: z.string().describe('The error from a failed file read'),
       }),
     ),
-  execute: async ({ context }) => {
+  execute: async context => {
     try {
-      const sandbox = await Sandbox.connect(context.sandboxId);
-      const fileContent = await sandbox.files.read(context.path);
+      const fileContent = await retryTransient('readFile', async () => {
+        const sandbox = await Sandbox.connect(context.sandboxId);
+        return sandbox.files.read(context.path);
+      });
 
       return {
         content: fileContent,
@@ -124,7 +205,7 @@ export const readFile = createTool({
       };
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },
@@ -148,10 +229,12 @@ export const writeFile = createTool({
         error: z.string().describe('The error from a failed file write'),
       }),
     ),
-  execute: async ({ context }) => {
+  execute: async context => {
     try {
-      const sandbox = await Sandbox.connect(context.sandboxId);
-      await sandbox.files.write(context.path, context.content);
+      await retryTransient('writeFile', async () => {
+        const sandbox = await Sandbox.connect(context.sandboxId);
+        await sandbox.files.write(context.path, context.content);
+      });
 
       return {
         success: true,
@@ -159,7 +242,7 @@ export const writeFile = createTool({
       };
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },
@@ -189,10 +272,12 @@ export const writeFiles = createTool({
         error: z.string().describe('The error from a failed files write'),
       }),
     ),
-  execute: async ({ context }) => {
+  execute: async context => {
     try {
-      const sandbox = await Sandbox.connect(context.sandboxId);
-      await sandbox.files.write(context.files);
+      await retryTransient('writeFiles', async () => {
+        const sandbox = await Sandbox.connect(context.sandboxId);
+        await sandbox.files.write(context.files);
+      });
 
       return {
         success: true,
@@ -200,7 +285,7 @@ export const writeFiles = createTool({
       };
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },
@@ -231,10 +316,12 @@ export const listFiles = createTool({
         error: z.string().describe('The error from a failed file listing'),
       }),
     ),
-  execute: async ({ context }) => {
+  execute: async context => {
     try {
-      const sandbox = await Sandbox.connect(context.sandboxId);
-      const fileList = await sandbox.files.list(context.path);
+      const fileList = await retryTransient('listFiles', async () => {
+        const sandbox = await Sandbox.connect(context.sandboxId);
+        return sandbox.files.list(context.path);
+      });
 
       fileList.map(f => f.type);
 
@@ -248,7 +335,7 @@ export const listFiles = createTool({
       };
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },
@@ -271,10 +358,12 @@ export const deleteFile = createTool({
         error: z.string().describe('The error from a failed file deletion'),
       }),
     ),
-  execute: async ({ context }) => {
+  execute: async context => {
     try {
-      const sandbox = await Sandbox.connect(context.sandboxId);
-      await sandbox.files.remove(context.path);
+      await retryTransient('deleteFile', async () => {
+        const sandbox = await Sandbox.connect(context.sandboxId);
+        await sandbox.files.remove(context.path);
+      });
 
       return {
         success: true,
@@ -282,7 +371,7 @@ export const deleteFile = createTool({
       };
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },
@@ -305,10 +394,12 @@ export const createDirectory = createTool({
         error: z.string().describe('The error from a failed directory creation'),
       }),
     ),
-  execute: async ({ context }) => {
+  execute: async context => {
     try {
-      const sandbox = await Sandbox.connect(context.sandboxId);
-      await sandbox.files.makeDir(context.path);
+      await retryTransient('createDirectory', async () => {
+        const sandbox = await Sandbox.connect(context.sandboxId);
+        await sandbox.files.makeDir(context.path);
+      });
 
       return {
         success: true,
@@ -316,7 +407,7 @@ export const createDirectory = createTool({
       };
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },
@@ -347,10 +438,12 @@ export const getFileInfo = createTool({
         error: z.string().describe('The error from a failed file info request'),
       }),
     ),
-  execute: async ({ context }) => {
+  execute: async context => {
     try {
-      const sandbox = await Sandbox.connect(context.sandboxId);
-      const info = await sandbox.files.getInfo(context.path);
+      const info = await retryTransient('getFileInfo', async () => {
+        const sandbox = await Sandbox.connect(context.sandboxId);
+        return sandbox.files.getInfo(context.path);
+      });
 
       return {
         name: info.name,
@@ -366,7 +459,7 @@ export const getFileInfo = createTool({
       };
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },
@@ -390,18 +483,22 @@ export const checkFileExists = createTool({
         error: z.string().describe('The error from a failed existence check'),
       }),
     ),
-  execute: async ({ context }) => {
+  execute: async context => {
     try {
-      const sandbox = await Sandbox.connect(context.sandboxId);
+      const sandbox = await retryTransient('checkFileExists:connect', () =>
+        Sandbox.connect(context.sandboxId),
+      );
 
       try {
-        const info = await sandbox.files.getInfo(context.path);
+        const info = await retryTransient('checkFileExists:getInfo', () =>
+          sandbox.files.getInfo(context.path),
+        );
         return {
           exists: true,
           path: context.path,
           type: info.type,
         };
-      } catch (e) {
+      } catch {
         // If getInfo fails, the file doesn't exist
         return {
           exists: false,
@@ -410,7 +507,7 @@ export const checkFileExists = createTool({
       }
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },
@@ -439,10 +536,12 @@ export const getFileSize = createTool({
         error: z.string().describe('The error from a failed size check'),
       }),
     ),
-  execute: async ({ context }) => {
+  execute: async context => {
     try {
-      const sandbox = await Sandbox.connect(context.sandboxId);
-      const info = await sandbox.files.getInfo(context.path);
+      const info = await retryTransient('getFileSize', async () => {
+        const sandbox = await Sandbox.connect(context.sandboxId);
+        return sandbox.files.getInfo(context.path);
+      });
 
       let humanReadableSize: string | undefined;
 
@@ -466,7 +565,7 @@ export const getFileSize = createTool({
       };
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },
@@ -505,9 +604,11 @@ export const watchDirectory = createTool({
         error: z.string().describe('The error from a failed directory watch'),
       }),
     ),
-  execute: async ({ context }) => {
+  execute: async context => {
     try {
-      const sandbox = await Sandbox.connect(context.sandboxId);
+      const sandbox = await retryTransient('watchDirectory:connect', () =>
+        Sandbox.connect(context.sandboxId),
+      );
       const events: Array<{ type: FilesystemEventType; name: string; timestamp: string }> = [];
 
       // Start watching the directory
@@ -538,7 +639,7 @@ export const watchDirectory = createTool({
       };
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },
@@ -568,15 +669,19 @@ export const runCommand = createTool({
         error: z.string().describe('The error from a failed command execution'),
       }),
     ),
-  execute: async ({ context }) => {
+  execute: async context => {
     try {
-      const sandbox = await Sandbox.connect(context.sandboxId);
+      const sandbox = await retryTransient('runCommand:connect', () =>
+        Sandbox.connect(context.sandboxId),
+      );
       const startTime = Date.now();
 
-      const result = await sandbox.commands.run(context.command, {
-        cwd: context.workingDirectory,
-        timeoutMs: context.timeoutMs,
-      });
+      const result = await retryTransient('runCommand', () =>
+        sandbox.commands.run(context.command, {
+          cwd: context.workingDirectory,
+          timeoutMs: context.timeoutMs,
+        }),
+      );
 
       const executionTime = Date.now() - startTime;
 
@@ -590,7 +695,7 @@ export const runCommand = createTool({
       };
     } catch (e) {
       return {
-        error: JSON.stringify(e),
+        error: errorDetails(e),
       };
     }
   },

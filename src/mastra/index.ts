@@ -3,10 +3,12 @@ import { LibSQLStore } from '@mastra/libsql';
 import { PinoLogger } from '@mastra/loggers';
 import { withOpenBox } from '@openbox-ai/openbox-mastra-sdk';
 import { codingAgent } from './agents/coding-agent';
+import { codingAgentHitlWorkflow } from './workflows/coding-agent-hitl';
 
 function buildMastra() {
   return new Mastra({
     agents: { codingAgent },
+    workflows: { codingAgentHitl: codingAgentHitlWorkflow },
     storage: new LibSQLStore({
       id: 'coding-agent-storage',
       url: 'file:../../mastra.db',
