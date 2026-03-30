@@ -11,25 +11,18 @@ It is intended as a runnable demo for:
 
 ## Requirements
 
-- Node.js `>=20.9.0`
+- Node.js `>=24.10.0`
 - an E2B API key
 - an OpenAI API key
 - an OpenBox Core URL and API key
-- the `openbox-mastra-sdk` repository checked out next to this project at `../openbox-mastra-sdk`
-
-The local SDK dependency is currently:
-
-```text
-file:../openbox-mastra-sdk
-```
-
-If you move the repositories, update `package.json` accordingly.
 
 ## Installation
 
 ```bash
 npm install
 ```
+
+This installs `@openbox-ai/openbox-mastra-sdk` from npm. You do not need a sibling SDK checkout.
 
 ## Configuration
 
@@ -64,8 +57,6 @@ Start the local development server:
 npm run dev
 ```
 
-This project builds the local `openbox-mastra-sdk` dependency before starting the Mastra dev server.
-
 Other useful commands:
 
 ```bash
@@ -96,12 +87,3 @@ Verify:
 - `OPENBOX_URL` is reachable from your machine
 - `OPENBOX_API_KEY` is correct
 - `OPENBOX_VALIDATE` is set appropriately for the environment
-
-### Local SDK changes are not reflected
-
-This project depends on the sibling `openbox-mastra-sdk` repo by local path. Rebuild the SDK and restart the dev server:
-
-```bash
-npm --prefix ../openbox-mastra-sdk run build
-npm run dev
-```
