@@ -40,6 +40,7 @@ Required values:
 | `OPENAI_API_KEY` | model access for the coding agent |
 | `OPENBOX_URL` | OpenBox Core base URL |
 | `OPENBOX_API_KEY` | OpenBox API key |
+| `OPENBOX_WORKLOAD_PRIVATE_KEY` | the agent's workload private key (PEM), shown when the agent is created; agents use IAM v3 workload identity |
 
 Common runtime options:
 
