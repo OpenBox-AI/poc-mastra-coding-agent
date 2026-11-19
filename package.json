@@ -32,5 +32,17 @@
     "@types/node": "^24.1.0",
     "mastra": "latest",
     "typescript": "^5.8.3"
+  },
+  "overrides": {
+    "@opentelemetry/instrumentation-cassandra-driver": "0.68.0",
+    "@opentelemetry/instrumentation-http": "0.223.2",
+    "@opentelemetry/instrumentation-knex": "0.67.0",
+    "@opentelemetry/instrumentation-mongoose": "0.69.0",
+    "@opentelemetry/instrumentation-mysql": "0.69.1",
+    "@opentelemetry/instrumentation-mysql2": "0.69.0",
+    "@opentelemetry/instrumentation-oracledb": "0.48.0",
+    "@opentelemetry/instrumentation-pg": "0.76.0",
+    "@opentelemetry/instrumentation-tedious": "0.42.0",
+    "@opentelemetry/sdk-node": "0.223.2"
   }
 }
